@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
 class BreakTimerMini extends StatefulWidget {
   const BreakTimerMini({super.key});
@@ -9,6 +10,19 @@ class BreakTimerMini extends StatefulWidget {
 }
 
 class _BreakTimerMiniState extends State<BreakTimerMini> {
+  late Box breakbox;
+
+  @override
+  void initState() {
+    super.initState();
+    breakbox = Hive.box('breakTime');
+    final savedMinutes = breakbox.get("totalBreakMinutes");
+    if (savedMinutes != null) {
+      totalBreak = Duration(minutes: savedMinutes);
+      currentTime = totalBreak;
+    }
+  }
+
   Timer? _timer;
 
   Duration totalBreak = const Duration(minutes: 5);
@@ -92,6 +106,7 @@ class _BreakTimerMiniState extends State<BreakTimerMini> {
                 currentTime = totalBreak;
                 isCountingUp = false;
               });
+              breakbox.put("totalBreakMinutes", i);
               Navigator.pop(context);
             },
           ),

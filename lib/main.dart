@@ -11,6 +11,7 @@ void main() async {
   Hive.registerAdapter(StudentAdapter());
   await Hive.openBox('taskbox');
   Hive.openBox<Student>('studentbox');
+  await Hive.openBox('breakTime');
 
   runApp(const MyApp());
 }
