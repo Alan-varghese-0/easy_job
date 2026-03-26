@@ -6,16 +6,25 @@ part 'student.g.dart';
 class Student extends HiveObject {
   @HiveField(0)
   String name;
+
   @HiveField(1)
   String batch;
+
   @HiveField(2)
   String classTime;
+
   @HiveField(3)
   String course;
+
   @HiveField(4)
   List<String> presentDates;
+
   @HiveField(5)
-  List<String> completedLessons = [];
+  List<String> completedLessons;
+
+  @HiveField(6)
+  String roadmapType;
+
   Student({
     required this.name,
     required this.batch,
@@ -23,5 +32,6 @@ class Student extends HiveObject {
     required this.course,
     required this.presentDates,
     required this.completedLessons,
+    required this.roadmapType,
   });
 }

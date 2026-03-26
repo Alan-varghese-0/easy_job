@@ -1,70 +1,66 @@
-import 'package:easy_job/topics/lesson.dart';
 import 'package:flutter/material.dart';
+import 'lesson.dart';
 import '../models/student.dart';
+
+enum LessonType { flutter, uiux, extra }
 
 class LessonScreen extends StatefulWidget {
   final Student student;
+  final LessonType type;
 
-  const LessonScreen({super.key, required this.student});
+  const LessonScreen({super.key, required this.student, required this.type});
 
   @override
   State<LessonScreen> createState() => _LessonScreenState();
 }
 
 class _LessonScreenState extends State<LessonScreen> {
+  List<String> getLessons() {
+    switch (widget.type) {
+      case LessonType.flutter:
+        return flutterRoadmap;
+      case LessonType.uiux:
+        return uiuxRoadmap;
+      case LessonType.extra:
+        return extraSkills;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ✅ Separate unchecked & checked lessons
-    final List<String> uncheckedLessons = lessons
-        .where((lesson) => !widget.student.completedLessons.contains(lesson))
-        .toList();
-
-    final List<String> checkedLessons = lessons
-        .where((lesson) => widget.student.completedLessons.contains(lesson))
-        .toList();
-
-    // ✅ Unchecked first, checked at bottom
-    final List<String> orderedLessons = [
-      ...uncheckedLessons,
-      ...checkedLessons,
-    ];
+    final lessons = getLessons();
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("Lessons – ${widget.student.name}"),
+        title: Text(widget.student.name),
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
       ),
-      body: ListView.builder(
-        itemCount: orderedLessons.length,
-        itemBuilder: (context, index) {
-          final String lesson = orderedLessons[index];
-          final bool isChecked = widget.student.completedLessons.contains(
-            lesson,
-          );
+      body: ListView(
+        children: lessons.map((lesson) {
+          final isDone = widget.student.completedLessons.contains(lesson);
 
           return CheckboxListTile(
-            title: Text(
-              lesson,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white,
-                fontWeight: isChecked ? FontWeight.normal : FontWeight.bold,
-              ),
-            ),
-            value: isChecked,
-            onChanged: (bool? value) {
+            value: isDone,
+            onChanged: (value) {
               setState(() {
                 if (value == true) {
                   widget.student.completedLessons.add(lesson);
                 } else {
                   widget.student.completedLessons.remove(lesson);
                 }
-                widget.student.save(); // ✅ Persist to Hive
+                widget.student.save();
               });
             },
+            title: Text(
+              lesson,
+              style: TextStyle(
+                color: isDone ? Colors.grey : Colors.white,
+                decoration: isDone ? TextDecoration.lineThrough : null,
+              ),
+            ),
           );
-        },
+        }).toList(),
       ),
     );
   }

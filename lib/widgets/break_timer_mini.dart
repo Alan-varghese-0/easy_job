@@ -9,86 +9,156 @@ class BreakTimerMini extends StatefulWidget {
   State<BreakTimerMini> createState() => _BreakTimerMiniState();
 }
 
-class _BreakTimerMiniState extends State<BreakTimerMini> {
-  late Box breakbox;
-
-  @override
-  void initState() {
-    super.initState();
-    breakbox = Hive.box('breakTime');
-    final savedMinutes = breakbox.get("totalBreakMinutes");
-    if (savedMinutes != null) {
-      totalBreak = Duration(minutes: savedMinutes);
-      currentTime = totalBreak;
-    }
-  }
-
+class _BreakTimerMiniState extends State<BreakTimerMini>
+    with WidgetsBindingObserver {
+  late Box breakBox;
   Timer? _timer;
 
   Duration totalBreak = const Duration(minutes: 5);
-  Duration currentTime = const Duration(minutes: 3);
+  Duration currentTime = const Duration(minutes: 5);
 
   bool isRunning = false;
   bool isCountingUp = false;
 
   DateTime lastUsedDate = DateTime.now();
 
-  void toggleTimer() {
-    if (isRunning) {
-      pause();
-    } else {
-      start();
+  // ─────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    breakBox = Hive.box('breakTime');
+
+    final savedMinutes = breakBox.get('totalBreakMinutes');
+    if (savedMinutes != null) {
+      totalBreak = Duration(minutes: savedMinutes);
+      currentTime = totalBreak;
+    }
+
+    final savedDate = breakBox.get('lastUsedDate');
+    if (savedDate != null) {
+      lastUsedDate = DateTime.parse(savedDate);
     }
   }
 
-  void start() {
-    checkNewDay();
+  // ─────────────────────────────────────────────
+  // LIFECYCLE HANDLING (THIS IS THE MAGIC)
+  // ─────────────────────────────────────────────
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && isRunning) {
+      _restoreElapsedTime();
+    }
+  }
+
+  void _restoreElapsedTime() {
+    final saved = breakBox.get('lastStartTime');
+    if (saved == null) return;
+
+    final startTime = DateTime.parse(saved);
+    final elapsedSeconds = DateTime.now().difference(startTime).inSeconds;
+
+    if (elapsedSeconds <= 0) return;
+
+    setState(() {
+      if (!isCountingUp) {
+        final remaining = currentTime.inSeconds - elapsedSeconds;
+        if (remaining > 0) {
+          currentTime = Duration(seconds: remaining);
+        } else {
+          isCountingUp = true;
+          currentTime = Duration(seconds: remaining.abs());
+        }
+      } else {
+        currentTime += Duration(seconds: elapsedSeconds);
+      }
+    });
+
+    breakBox.put('lastStartTime', DateTime.now().toIso8601String());
+  }
+
+  // ─────────────────────────────────────────────
+  // TIMER CONTROLS
+  // ─────────────────────────────────────────────
+
+  void toggleTimer() {
+    if (isRunning) {
+      _pause();
+    } else {
+      _start();
+    }
+  }
+
+  void _start() {
+    _checkNewDay();
     isRunning = true;
 
+    breakBox.put('lastStartTime', DateTime.now().toIso8601String());
+
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() {
-        if (!isCountingUp) {
-          if (currentTime.inSeconds > 0) {
-            currentTime -= const Duration(seconds: 1);
-          } else {
-            isCountingUp = true;
-            currentTime += const Duration(seconds: 1);
-          }
-        } else {
-          currentTime += const Duration(seconds: 1);
-        }
-      });
+      _tick();
     });
   }
 
-  void pause() {
+  void _pause() {
     _timer?.cancel();
     setState(() {
       isRunning = false;
     });
   }
 
-  void checkNewDay() {
+  void _tick() {
+    setState(() {
+      if (!isCountingUp) {
+        if (currentTime.inSeconds > 0) {
+          currentTime -= const Duration(seconds: 1);
+        } else {
+          isCountingUp = true;
+          currentTime += const Duration(seconds: 1);
+        }
+      } else {
+        currentTime += const Duration(seconds: 1);
+      }
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // DAILY RESET
+  // ─────────────────────────────────────────────
+
+  void _checkNewDay() {
     final today = DateTime.now();
-    if (!isSameDay(today, lastUsedDate)) {
+    if (!_isSameDay(today, lastUsedDate)) {
       currentTime = totalBreak;
       isCountingUp = false;
       lastUsedDate = today;
+
+      breakBox.put('lastUsedDate', today.toIso8601String());
     }
   }
 
-  bool isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String format(Duration d) {
+  // ─────────────────────────────────────────────
+  // FORMAT
+  // ─────────────────────────────────────────────
+
+  String _format(Duration d) {
     final h = d.inHours.toString().padLeft(2, '0');
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$h:$m:$s';
   }
 
-  void openDurationPicker() {
+  // ─────────────────────────────────────────────
+  // PICK BREAK DURATION
+  // ─────────────────────────────────────────────
+
+  void _openDurationPicker() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.black,
@@ -97,7 +167,7 @@ class _BreakTimerMiniState extends State<BreakTimerMini> {
           itemCount: 61,
           itemBuilder: (_, i) => ListTile(
             title: Text(
-              "$i minutes",
+              '$i minutes',
               style: const TextStyle(color: Colors.white, fontSize: 22),
             ),
             onTap: () {
@@ -106,7 +176,8 @@ class _BreakTimerMiniState extends State<BreakTimerMini> {
                 currentTime = totalBreak;
                 isCountingUp = false;
               });
-              breakbox.put("totalBreakMinutes", i);
+
+              breakBox.put('totalBreakMinutes', i);
               Navigator.pop(context);
             },
           ),
@@ -115,49 +186,53 @@ class _BreakTimerMiniState extends State<BreakTimerMini> {
     );
   }
 
+  // ─────────────────────────────────────────────
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
+
+  // ─────────────────────────────────────────────
+  // UI
+  // ─────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: toggleTimer,
-      onLongPress: openDurationPicker,
+      onLongPress: _openDurationPicker,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: Colors.black,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey.shade800),
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10)],
         ),
-        height: 64,
-        alignment: Alignment.center,
         child: MediaQuery(
-          // 🔥 THIS PREVENTS SUB-PIXEL SCALING ARTIFACTS
           data: MediaQuery.of(
             context,
           ).copyWith(textScaler: TextScaler.noScaling),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 isRunning ? Icons.pause : Icons.play_arrow,
                 color: Colors.white,
                 size: 40,
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text(
-                format(currentTime),
-                textAlign: TextAlign.center,
+                _format(currentTime),
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
-                  fontFamily: 'RobotoMono', // 👈 BEST for timers
+                  fontFamily: 'RobotoMono',
                   color: isCountingUp ? Colors.red : Colors.white,
-                  decoration: TextDecoration.none,
                 ),
               ),
             ],
